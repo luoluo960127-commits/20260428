@@ -7,13 +7,15 @@ let hands = [];
 let webglStatus = "";
 let modelStatus = "正在載入模型...";
 let isModelLoaded = false;
+let bubbles = []; // 儲存所有水泡的陣列
+let tipsIdx = [4, 8, 12, 16, 20]; // 指尖的編號
 
 function preload() {
   // 初始化模型，並加入回呼函式確認載入狀態
   handPose = ml5.handPose({ flipped: true }, () => {
     modelStatus = "模型載入成功！";
     isModelLoaded = true;
-    console.log("Model Loaded");
+    checkAndStartDetection();
   });
 }
 
@@ -23,6 +25,13 @@ function mousePressed() {
 
 function gotHands(results) {
   hands = results;
+}
+
+function checkAndStartDetection() {
+  // 當模型載入完成，且相機物件已建立，才啟動辨識
+  if (isModelLoaded && video) {
+    handPose.detectStart(video, gotHands);
+  }
 }
 
 function setup() {
@@ -38,11 +47,13 @@ function setup() {
     webglStatus = "WebGL 支援：不支援 (辨識可能變慢或失敗)";
   }
 
-  video = createCapture(VIDEO, { flipped: true });
+  // 改用回呼函式確保相機啟動，並增加參數讓行動裝置相容性更好
+  video = createCapture(VIDEO, { video: { facingMode: 'user' } }, (stream) => {
+    console.log("Camera ready");
+    checkAndStartDetection();
+  });
+  video.size(640, 480); // 強制設定基礎解析度，避免初始寬高為 0
   video.hide();
-
-  // Start detecting hands
-  handPose.detectStart(video, gotHands);
 }
 
 function draw() {
@@ -54,7 +65,7 @@ function draw() {
   noStroke();
   textSize(16);
   textAlign(LEFT, TOP);
-  text(`${webglStatus}\n${modelStatus}`, 20, 20);
+  text(`${webglStatus}\n${modelStatus}\n414730217羅紫芸`, 20, 20);
 
   // 計算顯示影像的寬高 (整個畫布寬高的 50%) 與置中位置
   let vW = width * 0.5;
@@ -63,7 +74,10 @@ function draw() {
   let y = (height - vH) / 2;
 
   // 擷取攝影機影像內容正常顯示在視窗中間
-  image(video, x, y, vW, vH);
+  // 檢查 video 是否已載入內容，避免畫出空影像
+  if (video.width > 0) {
+    image(video, x, y, vW, vH);
+  }
 
   // Ensure at least one hand is detected
   if (hands.length > 0) {
@@ -73,10 +87,10 @@ function draw() {
         strokeWeight(4);
         if (hand.handedness == "Left") {
           stroke(255, 0, 255); // 左手粉紅色線
-          fill(255, 0, 255);
+          fill(255, 0, 255, 150); // 加入透明度
         } else {
           stroke(255, 255, 0); // 右手黃色線
-          fill(255, 255, 0);
+          fill(255, 255, 0, 150); // 加入透明度
         }
 
         // 定義要連接的點編號組
@@ -111,11 +125,51 @@ function draw() {
           let drawX = map(keypoint.x, 0, video.width, x, x + vW);
           let drawY = map(keypoint.y, 0, video.height, y, y + vH);
 
+          // 如果是指定的關鍵點 (4, 8, 12, 16, 20)，產生水泡
+          if (tipsIdx.includes(i)) {
+            if (frameCount % 5 === 0) { // 每 5 影格產生一個水泡，避免太多
+              bubbles.push(new Bubble(drawX, drawY));
+            }
+          }
+
           noStroke();
           circle(drawX, drawY, 16);
         }
       }
     }
+  }
+
+  // 更新並繪製所有水泡
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    bubbles[i].update();
+    bubbles[i].display();
+    // 如果水泡到了破掉的位置（例如飄了 150 像素或出界），就移除它
+    if (bubbles[i].isPopped()) {
+      bubbles.splice(i, 1);
+    }
+  }
+}
+
+// 定義水泡類別
+class Bubble {
+  constructor(x, y) {
+    this.x = x + random(-5, 5); // 稍微隨機偏移
+    this.y = y;
+    this.startY = y;
+    this.size = random(10, 25);
+    this.speed = random(1, 4);
+    this.popDistance = random(100, 250); // 水泡破掉的上升距離
+  }
+  update() {
+    this.y -= this.speed; // 往上飄
+  }
+  display() {
+    stroke(255, 255, 255, 200);
+    fill(255, 255, 255, 50); // 半透明白色的水泡
+    circle(this.x, this.y, this.size);
+  }
+  isPopped() {
+    return (this.startY - this.y > this.popDistance) || (this.y < -50);
   }
 }
 
