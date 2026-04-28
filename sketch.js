@@ -73,6 +73,11 @@ function draw() {
   let x = (width - vW) / 2;
   let y = (height - vH) / 2;
 
+  // 步驟：畫面鏡像左右反轉
+  push(); 
+  translate(width, 0); // 將原點移至畫布右側
+  scale(-1, 1);        // 水平反轉 X 軸
+
   // 擷取攝影機影像內容正常顯示在視窗中間
   // 檢查 video 是否已載入內容，避免畫出空影像
   if (video.width > 0) {
@@ -148,6 +153,8 @@ function draw() {
       bubbles.splice(i, 1);
     }
   }
+
+  pop(); // 結束鏡像反轉範圍，確保後續繪製（如文字）不被反轉
 }
 
 // 定義水泡類別
